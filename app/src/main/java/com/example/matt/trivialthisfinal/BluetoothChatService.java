@@ -1,8 +1,6 @@
 package com.example.matt.trivialthisfinal;
 
-/**
- * Created by Matt on 5/7/2018.
- */
+
 /*
  * Copyright (C) 2014 The Android Open Source Project
  *
