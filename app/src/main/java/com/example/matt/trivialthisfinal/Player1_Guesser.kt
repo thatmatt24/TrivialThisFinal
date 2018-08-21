@@ -1,4 +1,4 @@
-package com.example.matt.gamefinal
+package com.example.matt.trivialthisfinal
 
 import android.app.Activity
 import android.bluetooth.BluetoothAdapter
