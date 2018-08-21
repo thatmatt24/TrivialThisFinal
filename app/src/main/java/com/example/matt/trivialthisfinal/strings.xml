@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">GameFinal</string>
+    <string name="button1">Find a Player</string>
+    <string name="button2">PLAY</string>
+    <string name="toggle_P1">Player 1</string>
+    <string name="toggle_P2">Player 2</string>
+</resources>
