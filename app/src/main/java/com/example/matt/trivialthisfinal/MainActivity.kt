@@ -1,342 +1,491 @@
 package com.example.matt.trivialthisfinal
 
-import android.app.ActionBar
+import android.Manifest.permission.ACCESS_FINE_LOCATION
+import android.os.Bundle
+import android.support.design.widget.Snackbar
+import android.support.v7.app.AppCompatActivity
+import android.view.Menu
+import android.widget.Button
+import android.content.Intent
+import android.telecom.Call
+import android.view.View
+import android.view.MenuItem
 import android.app.Activity
 import android.bluetooth.BluetoothAdapter
-import android.content.Intent
-import android.os.Bundle
-import android.os.Handler
-import android.support.v4.app.FragmentActivity
-import android.support.v7.app.AppCompatActivity
+import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothServerSocket
+import android.bluetooth.BluetoothSocket
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.IntentFilter
+import android.content.pm.PackageManager
+import android.database.DatabaseErrorHandler
+import android.os.UserHandle
+import android.support.v4.app.ActivityCompat
+import android.text.method.ScrollingMovementMethod
 import android.util.Log
-import android.view.KeyEvent
-import android.view.View
-import android.view.inputmethod.EditorInfo
-import android.widget.ArrayAdapter
 import android.widget.TextView
 import android.widget.Toast
-import org.jetbrains.anko.toast
+import java.io.IOException
+import java.io.InputStream
+import java.io.OutputStream
+import java.io.UnsupportedEncodingException
+import java.util.UUID
 import kotlinx.android.synthetic.main.activity_main.*
-import java.util.*
+import kotlinx.android.synthetic.main.content_main.*
+import com.example.matt.trivialthisfinal.R.id.playButton
+import org.w3c.dom.UserDataHandler
 
 
-@Suppress("DEPRECATED_IDENTITY_EQUALS")
+/***********************************************************************************************/
+
 class MainActivity : AppCompatActivity() {
 
-    var myUUID: UUID = UUID.fromString("1c463fe7-09d1-4d5c-bdd0-0722931b4f6a")
+    private var myUUID: UUID? = null
+    private var mBluetoothAdapter: BluetoothAdapter? = null //holds the Bluetooth Adapter
+    private var mTextarea: TextView? = null                 //for writing messages to screen
+   // private var server: AcceptThread? = null                //server object
+   // private var client:ConnectThread? = null
 
-    private val TAG = "MainActivity"
-
-    // Intent request codes
-    private val REQUEST_CONNECT_DEVICE_SECURE = 1
-    private val REQUEST_CONNECT_DEVICE_INSECURE = 2
-    private val REQUEST_ENABLE_BT = 3
-
-    /**
-     * Name of the connected device
-     */
-    private var mConnectedDeviceName: String? = null
-
-    /**
-     * Array adapter for the conversation thread
-     */
-    private var mConversationArrayAdapter: ArrayAdapter<String>? = null
-
-    /**
-     * String buffer for outgoing messages
-     */
-    private val mOutStringBuffer: StringBuffer? = null
-
-    /**
-     * Local Bluetooth adapter
-     */
-    private var mBluetoothAdapter: BluetoothAdapter? = null
-
-    /**
-     * Member object for the chat services
-     */
-    private var mChatService: BluetoothChatService? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-//        setHasOptionsMenu(true)
         setContentView(R.layout.activity_main)
-        // Get local Bluetooth adapter
-        mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
+        setSupportActionBar(toolbar)
 
-        // If the adapter is null, then Bluetooth is not supported
-        if (mBluetoothAdapter == null) {
-            val activity = this
-            Toast.makeText(activity, "Bluetooth is not available", Toast.LENGTH_LONG).show()
-            activity.finish()
+
+        var context = this
+
+
+    SaveButton.setOnClickListener({
+    if(userText.text.toString().length > 0){
+
+    var user = userInput(userText.text.toString())
+    var db = baseFile(context)
+   // db.insertData(user)
+}else{
+    Toast.makeText(context, "Enter a name", Toast.LENGTH_SHORT) .show()6
+}
+
+
+    })
+
+
+
+    }
+
+    /*
+    /***********************************************************************************************/
+
+
+    private val mReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            Log.i(LOG_TAG, "BroadcastReceiver onReceive()")
+            handleBTDevice(intent)
+        }
+    }//when activated, scans for Bluetooth devices -- looks to see which ones it can detect
+
+    /***********************************************************************************************/
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_main)
+        setSupportActionBar(toolbar)
+
+        myUUID = UUID.fromString(MY_UUID_STRING)        //unique UUID (or GUID) for this App
+
+        mTextarea = findViewById(R.id.textView) as TextView?
+        if (mTextarea != null) {
+            mTextarea!!.movementMethod = ScrollingMovementMethod()
+            mTextarea!!.append("My UUID:  $myUUID \n")
+        }
+        setUpButtons()
+
+    }
+
+    /***********************************************************************************************/
+
+    private fun setUpButtons() {
+
+        val mainActButton  = findViewById<Button>(R.id.playButton)
+
+        mainActButton?.setOnClickListener {
+
+            //set a listner for the button
+            //call methods(name self explanatory)
+            getPairedDevices()
+            setUpBroadcastReceiver()
+            /*f
+            //creates the intent object
+            val intent = Intent(this,SecondScreenApp::class.java)
+            //starts up the intent
+            startActivity(intent)
+            */
         }
 
-        play_btn.isEnabled = false
-        player1_toggle?.setOnCheckedChangeListener { buttonView, isChecked ->
-            if (isChecked) {
-//                play_btn.visibility = View.VISIBLE
-                play_btn.isEnabled = true
-                player2_toggle.isEnabled = false
-                val serverIntent = Intent(this, DeviceListActivity::class.java)
-                startActivityForResult(serverIntent, REQUEST_CONNECT_DEVICE_SECURE)
-
-            } else {
-//                play_btn.visibility = View.INVISIBLE
-                play_btn.isEnabled = false
-                player2_toggle.isEnabled = true
-            }
-        }
-        player2_toggle?.setOnCheckedChangeListener { buttonView, isChecked ->
-            if (isChecked) {
-//                play_btn.visibility = View.VISIBLE
-                player1_toggle.isEnabled = false
-                play_btn.isEnabled = true
-
-            } else {
-                play_btn.isEnabled = false
-//                play_btn.visibility = View.INVISIBLE
-                player1_toggle.isEnabled = true
-            }
-        }
-
-        play_btn.setOnClickListener {
-            when {
-                player1_toggle.isChecked -> {
-                    gameScreen(1)
+            ////////////////////////////////////////////////////////////////////////////////////////
+            val connectButton = findViewById(R.id.linkButton) as Button?
+            connectButton?.setOnClickListener {    //This button activates the App as the server
+                Log.i(TSERVER, "Connect Button setting up server")
+                mTextarea!!.append("Connect Button: setting up server\n")
+                //make server discoverable for N_SECONDS
+                val discoverableIntent = Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE)
+                discoverableIntent.putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, N_SECONDS)
+                startActivity(discoverableIntent)
+                //create server thread
+                server = AcceptThread()
+                if (server != null) {   //start server thread
+                    Log.i(TSERVER, "Connect Button spawning server thread")
+                    mTextarea!!.append("Connect Button: spawning server thread $server \n")
+                    server!!.start()     //calls AcceptThread's run() method
+                } else {
+                    Log.i(TSERVER, "setupButtons(): server is null")
                 }
-                player2_toggle.isChecked -> {
-                    gameScreen(2)
-
-//                    val play2Intent = Intent(this, Player2_Hinter::class.java)
-//                    this.startActivity(play2Intent)
-                }
-                else -> toast("Choose a Player!")
             }
+
+            ////////////////////////////////////////////////////////////////////////////////////////
+
+
         }
+    /***********************************************************************************************/
 
-//        discoverable_btn.setOnClickListener{
-//            ensureDiscoverable()
-//        }
-    }
-    private fun gameScreen(player:Int) {
-        if(player == 1){
-            Guesser.visibility = View.VISIBLE
-            play_btn.visibility = View.GONE
-            player1_toggle.visibility = View.GONE
-            player2_toggle.visibility = View.GONE
-
-        }else if (player == 2){
-            Hinter.visibility = View.VISIBLE
-            play_btn.visibility = View.GONE
-            player1_toggle.visibility = View.GONE
-            player2_toggle.visibility = View.GONE
-        } else{
-            Guesser.visibility = View.GONE
-            Hinter.visibility = View.GONE
-            play_btn.visibility = View.VISIBLE
-            player1_toggle.visibility = View.VISIBLE
-            player2_toggle.visibility = View.VISIBLE
-        }
+    override fun onCreateOptionsMenu(menu: Menu): Boolean {
+        // Inflate the menu; this adds items to the action bar if it is present.
+        menuInflater.inflate(R.menu.menu_main, menu)
+        return true
     }
 
-    override fun onBackPressed() {
-        gameScreen(3)
-//        if(isHome())
-//            super.onBackPressed()
-
-    }
-    private fun isHome():Boolean{
-
-        return (Guesser.visibility == View.GONE && Hinter.visibility == View.GONE
-                &&  play_btn.visibility == View.VISIBLE &&
-                player1_toggle.visibility == View.VISIBLE &&
-                player2_toggle.visibility == View.VISIBLE)
-    }
-
-
-    public override fun onStart() {
-        super.onStart()
-        // If BT is not on, request that it be enabled.
-        // setupChat() will then be called during onActivityResult
-        if (!mBluetoothAdapter!!.isEnabled) {
-            val enableIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
-            startActivityForResult(enableIntent, REQUEST_ENABLE_BT)
-            // Otherwise, setup the chat session
-        } else if (mChatService == null) {
-            setupChat()
-        }
-    }
-
-    public override fun onDestroy() {
-        super.onDestroy()
-        mChatService?.stop()
-    }
+    /***********************************************************************************************/
 
     public override fun onResume() {
         super.onResume()
+        mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
+        Log.i(LOG_TAG, "onResume()")
+        if (mBluetoothAdapter == null) {
+            // Device does not support Bluetooth
+            Log.i(LOG_TAG, "No Bluetooth on this device")
+            Toast.makeText(baseContext,
+                    "No Bluetooth on this device", Toast.LENGTH_LONG).show()
+        } else if (!mBluetoothAdapter!!.isEnabled) {
+            Log.i(LOG_TAG, "enabling Bluetooth")
+            val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
+            startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT)
+        }
+        mTextarea?.append("This device is:  ${mBluetoothAdapter?.name} \n")
+        Log.i(LOG_TAG, "End of onResume()")
+    }
 
-        Log.i(TAG,"onResume")
-        // Performing this check in onResume() covers the case in which BT was
-        // not enabled during onStart(), so we were paused to enable it...
-        // onResume() will be called when ACTION_REQUEST_ENABLE activity returns.
-        if (mChatService != null) {
-            // Only if the state is STATE_NONE, do we know that we haven't started already
-            if (mChatService!!.state == BluetoothChatService.STATE_NONE) {
-                // Start the Bluetooth chat services
-                mChatService!!.start()
+
+    /***********************************************************************************************/
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent) {
+        Log.i(LOG_TAG, "onActivityResult(): requestCode = $requestCode")
+        if (requestCode == REQUEST_ENABLE_BT) {
+            if (resultCode == Activity.RESULT_OK) {
+                Log.i(LOG_TAG, "  --    Bluetooth is enabled")
+                getPairedDevices() //find already known paired devices
+                setUpBroadcastReceiver()
             }
         }
     }
-    private fun setupChat() {
-        Log.d(TAG, "setupChat()")
+    /***********************************************************************************************/
 
-        mChatService = BluetoothChatService(this, mHandler)
+    /***********************************************************************************************/
 
-
+    private fun getPairedDevices() {//find already known paired devices
+        val pairedDevices = mBluetoothAdapter!!.bondedDevices
+        Log.i(TCLIENT, "--------------\ngetPairedDevices() - Known Paired Devices")
+        // If there are paired devices
+        if (pairedDevices.size > 0) {
+            for (device in pairedDevices) {
+                Log.i(TCLIENT, device.name + "\n" + device)
+                mTextarea!!.append("" + device.name + "\n" + device + "\n")
+            }
+        }
+        Log.i(TCLIENT, "getPairedDevices() - End of Known Paired Devices\n------")
     }
 
-    private fun connectDevice(data: Intent, secure: Boolean) {
-        // Get the device MAC address
-        val address = data.extras!!
-                .getString(DeviceListActivity.EXTRA_DEVICE_ADDRESS)
-        // Get the BluetoothDevice object
-        val device = mBluetoothAdapter!!.getRemoteDevice(address)
-        // Attempt to connect to the device
-        mChatService!!.connect(device, secure)
-    }
+    /***********************************************************************************************/
 
-
-    fun sendMessage(message: String) {
-        // Check that we're actually connected before trying anything
-        if (mChatService!!.state != BluetoothChatService.STATE_CONNECTED) {
-            Toast.makeText(this, R.string.not_connected, Toast.LENGTH_SHORT).show()
-            Log.i(TAG,"sending message hi")
-            //send message from here - but using what
+    private fun setUpBroadcastReceiver() {
+        // Create a BroadcastReceiver for ACTION_FOUND
+        if (ActivityCompat.checkSelfPermission(this,
+                        android.Manifest.permission.ACCESS_FINE_LOCATION) !=
+                PackageManager.PERMISSION_GRANTED &&
+                ActivityCompat.checkSelfPermission(this,
+                        android.Manifest.permission.ACCESS_COARSE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED)    {
+            ActivityCompat.requestPermissions(this,
+                    arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION),
+                    ACCESS_FINE_LOCATION)
+            Log.i(TCLIENT,"Getting Permission")
             return
+            //Discovery will be setup in onRequestPermissionResult() if permission is granted
         }
-
-        // Check that there's actually something to send
-        if (message.isNotEmpty()) {
-            // Get the message bytes and tell the BluetoothChatService to write
-            val send = message.toByteArray()
-            mChatService!!.write(send)
-
-            // Reset out string buffer to zero and clear the edit text field
-
-        }
+        setupDiscovery()
     }
 
-    private fun ensureDiscoverable() {
-        if (mBluetoothAdapter!!.scanMode != BluetoothAdapter.SCAN_MODE_CONNECTABLE_DISCOVERABLE) {
-            val discoverableIntent = Intent(BluetoothAdapter.ACTION_REQUEST_DISCOVERABLE)
-            discoverableIntent.putExtra(BluetoothAdapter.EXTRA_DISCOVERABLE_DURATION, 300)
-            startActivity(discoverableIntent)
-        }
-    }
+    /***********************************************************************************************/
 
-    fun setStatus( resId:Int) {
-        val activity: FragmentActivity = this ?: return
-        val actionBar: ActionBar = activity.actionBar ?: return
-        actionBar.setSubtitle(resId)
-    }
-
-    /**
-     * Updates the status on the action bar.
-     *
-     * @param subTitle status
-     */
-    fun setStatus( subTitle:CharSequence) {
-        val activity: MainActivity = this ?: return
-        val  actionBar : ActionBar = activity.actionBar ?: return
-        actionBar.subtitle = subTitle
-    }
-
-
-    private var mHandler = Handler{
-        when (it.what) {
-            Constants.MESSAGE_STATE_CHANGE -> {
-                val status = when (it.arg1) {
-                    BluetoothChatService.STATE_CONNECTED -> ""
-                    BluetoothChatService.STATE_CONNECTING -> ""
-                    BluetoothChatService.STATE_LISTEN -> ""
-                    BluetoothChatService.STATE_NONE -> ""
-                    else -> ""
-                }
-                Log.i(TAG,"state change $status")
-                if(it.arg1 == BluetoothChatService.STATE_CONNECTED)
-                    Log.i(TAG,"sending message hi")
-                sendMessage("hi")
-            }
-            Constants.MESSAGE_WRITE -> {
-                val writeBuf = it.obj as ByteArray
-                // construct a string from the buffer
-                val writeMessage = String(writeBuf)
-                Log.i(TAG,"sent $writeMessage")
-            }
-            Constants.MESSAGE_READ -> {
-                val readBuf = it.obj as ByteArray
-                // construct a string from the valid bytes in the buffer
-                val readMessage = String(readBuf, 0, it.arg1)
-                Log.i(TAG, "message read - $readMessage")
-                //read message from here
-            }
-            Constants.MESSAGE_DEVICE_NAME -> {
-                // save the connected device's name
-                mConnectedDeviceName = it.data.getString(Constants.DEVICE_NAME)
-                Toast.makeText(this, "Connected to " + mConnectedDeviceName, Toast.LENGTH_SHORT).show()
-            }
-            Constants.MESSAGE_TOAST -> {
-                Toast.makeText(this, it.data.getString(Constants.TOAST), Toast.LENGTH_SHORT).show()
-            }
-            else -> {}
-        }
-        true
-    }
-
-
-
-
-
-    private val mWriteListener = object : TextView.OnEditorActionListener {
-        override fun onEditorAction(view: TextView, actionId: Int, event: KeyEvent): Boolean {
-            // If the action is a key-up event on the return key, send the message
-            if (actionId == EditorInfo.IME_NULL && event.action === KeyEvent.ACTION_UP) {
-                val message = view.text.toString()
-                sendMessage(message)
-            }
-            return true
-        }
-    }
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-//        public void onActivityResult(int requestCode, int resultCode, Intent data) {
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>,
+                                            grantResults: IntArray) {
         when (requestCode) {
-            REQUEST_CONNECT_DEVICE_SECURE ->
-                // When DeviceListActivity returns with a device to connect
-                if (resultCode == Activity.RESULT_OK) {
-                    Log.i(TAG,"Calling connectdevice")
-                    connectDevice(data!!, true)
+            ACCESS_FINE_LOCATION -> {
+                if (grantResults.isNotEmpty() && grantResults[0] ==
+                        PackageManager.PERMISSION_GRANTED) {
+                    Log.i(LOG_TAG, "Fine_Location Permission granted")
+                    setupDiscovery()
+                } else {    //tracking won't happen since user denied permission
+                    Log.i(LOG_TAG, "Fine_Location Permission refused")
                 }
-
-            REQUEST_CONNECT_DEVICE_INSECURE ->
-                // When DeviceListActivity returns with a device to connect
-                if (resultCode == Activity.RESULT_OK) {
-                    Log.i(TAG,"Calling connectdevice")
-                    connectDevice(data!!, false)
-                }
-
-            REQUEST_ENABLE_BT ->
-                // When the request to enable Bluetooth returns
-                if (resultCode == Activity.RESULT_OK) {
-                    // Bluetooth is now enabled, so set up a chat session
-                    setupChat()
-                } else {
-                    // User did not enable Bluetooth or an error occurred
-                    Log.d(TAG, "BT not enabled")
-                    Toast.makeText(this, R.string.bt_not_enabled_leaving,
-                            Toast.LENGTH_SHORT).show()
-                    finish()
-                }
+                return
+            }
         }
     }
+    /***********************************************************************************************/
+
+    private fun setupDiscovery() {
+        Log.i(TCLIENT,"Activating Discovery")
+        val filter = IntentFilter(BluetoothDevice.ACTION_FOUND)
+        registerReceiver(mReceiver, filter)
+        mBluetoothAdapter!!.startDiscovery()
+    }
+    /***********************************************************************************************/
+
+    private fun handleBTDevice(intent: Intent) {
+        Log.i(TCLIENT, "handleBRDevice() -- starting   <<<<--------------------")
+        val action = intent.action
+        // When discovery finds a device
+        if (BluetoothDevice.ACTION_FOUND == action) {
+            // Get the BluetoothDevice object from the Intent
+            val device = intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
+            val deviceName  =
+                    if (device.name != null) {
+                        device.name.toString()
+                    } else {
+                        "--no name--"
+                    }
+            Log.i(TCLIENT, deviceName + "\n" + device)
+            mTextarea!!.append("$deviceName, $device \n")
+
+            // The following is specific to this App for the client
+            if (deviceName.length > 3) {             //for now, looking for MSU prefix
+                val prefix = deviceName.subSequence(0,3)
+                mTextarea!!.append("Prefix = $prefix\n    ")
+                if (prefix == "MSU") {              //This is the server
+                    Log.i(TCLIENT,"Canceling Discovery")
+                    mBluetoothAdapter!!.cancelDiscovery()
+                    Log.i(TCLIENT,"Connecting")
+                    client = ConnectThread(device)  //FIX** remember and reconnect if interrupted?
+                    Log.i(TCLIENT,"Running Connect Thread")
+                    client?.start()
+                }
+            }
+        }
+    }
+    /***********************************************************************************************/
+
+    override fun onStop() {
+        super.onStop()
+        mBluetoothAdapter!!.cancelDiscovery()    //stop looking for Bluetooth devices
+        client?.cancel()
+    }
+
+    /***********************************************************************************************/
+
+    fun echoMsg(msg: String) {
+        mTextarea!!.append(msg)
+    }
+
+    /***********************************************************************************************/
+    ////////////////// Client Thread to talk to Server here ///////////////////
+
+    private inner class ConnectThread(mmDevice: BluetoothDevice):Thread(){//from android developer
+    private var mmSocket: BluetoothSocket? = null
+
+        init {
+            // Get a BluetoothSocket to connect with the given BluetoothDevice
+            Log.i(TCLIENT, "ConnectThread: init()")
+            try {
+                // myUUID is the app's UUID string, also used by the server code
+                mmSocket = mmDevice.createRfcommSocketToServiceRecord(myUUID)
+            } catch (e: IOException) {
+                Log.i(TCLIENT, "IOException when creating RFcommSocket\n $e")
+            }
+        }
+
+        override fun run() {
+            // Cancel discovery because it will slow down the connection
+            Log.i(TCLIENT, "ConnectThread: run()")
+            Log.i(TCLIENT, "in ClientThread - Canceling Discovery")
+            mBluetoothAdapter!!.cancelDiscovery()
+            if (mmSocket == null) {
+                Log.e(TCLIENT,"ConnectThread:run(): mmSocket is null")
+            }
+            try {
+                // Connect the device through the socket. This will block
+                // until it succeeds or throws an exception after 12 seconds (or so)
+                Log.i(TCLIENT, "Connecting to server")
+                mmSocket!!.connect()
+            } catch (connectException: IOException) {
+                Log.i(TCLIENT,
+                        "Connect IOException when trying socket connection\n $connectException")
+                // Unable to connect; close the socket and get out
+                try {
+                    mmSocket!!.close()
+                } catch (closeException: IOException) {
+                    Log.i(TCLIENT,
+                            "Close IOException when trying socket connection\n $closeException")
+                }
+
+                return
+            }
+            Log.i(TCLIENT, "Connection Established")
+            val sock = mmSocket!!
+            // Do work to manage the connection (in a separate thread)
+            manageConnectedSocket(sock)      //talk to server
+        }
+
+        //manage the connection over the passed-in socket
+        private fun manageConnectedSocket(socket: BluetoothSocket) {
+            val out: OutputStream
+            val theMessage = "ABC"      //test message: send actual message here
+            val msg = theMessage.toByteArray()
+            try {
+                Log.i(TCLIENT, "Sending the message: [$theMessage]")
+                out = socket.outputStream
+                out.write(msg)
+            } catch (ioe: IOException) {
+                Log.e(TCLIENT, "IOException when opening outputStream\n $ioe")
+                return
+            }
+
+        }
+
+        /**
+         * Will cancel an in-progress connection, and close the socket
+         */
+        fun cancel() {
+            try {
+                mmSocket!!.close()
+            } catch (ioe: IOException) {
+                Log.e(TCLIENT, "IOException when closing outputStream\n $ioe")
+            }
+        }
+    }
+
+    /***********************************************************************************************/
+
+    ///////////////////////////////  ServerSocket stuff here ///////////////////////////
+
+    private inner class AcceptThread : Thread() {  //from android developer
+        private var mmServerSocket: BluetoothServerSocket? = null
+
+        init {
+            // Use a temporary object that is later assigned to mmServerSocket,
+            // because mmServerSocket is supposed to be final
+            val tmp: BluetoothServerSocket
+            try {
+                // myUUID is the app's UUID string, also used by the client code
+                tmp = mBluetoothAdapter!!.listenUsingRfcommWithServiceRecord(SERVICE_NAME, myUUID)
+                Log.i(TSERVER, "AcceptThread registered the server\n")
+                mmServerSocket = tmp
+            } catch (e: IOException) {
+                Log.e(TSERVER, "AcceptThread registering the server failed\n $e")
+            }
+        }
+
+        override fun run() {
+            var socket: BluetoothSocket?
+            // Keep listening until exception occurs or a socket is returned
+            while (true) {
+                Log.i(TSERVER, "AcceptTread.run(): Server Looking for a Connection")
+                try {
+                    socket = mmServerSocket!!.accept()  //block until connection made or exception
+                    Log.i(TSERVER, "Server socket accepting a connection")
+                } catch (e: IOException) {
+                    Log.e(TSERVER, "socket accept threw an exception\n $e")
+                    break
+                }
+
+                // If a connection was accepted
+                if (socket != null) {
+                    Log.i(TSERVER, "Server Thread run(): Connection accepted")
+                    // Do work to manage the connection (in a separate thread)
+                    manageConnectedSocket(socket)
+                    break
+                } else {
+                    Log.i(TSERVER, "Server Thread run(): The socket is null")
+                }
+            }
+        }
+
+        //manage the Server's end of the conversation on the passed-in socket
+        fun manageConnectedSocket(socket: BluetoothSocket) {
+            Log.i(TSERVER, "\nManaging the Socket\n")
+            val inSt: InputStream
+            val nBytes: Int
+            val msg = ByteArray(255) //arbitrary size
+            try {
+                inSt = socket.inputStream
+                nBytes = inSt.read(msg)
+                Log.i(TSERVER, "\nServer Received $nBytes \n")
+            } catch (ioe: IOException) {
+                Log.e(TSERVER, "IOException when opening inputStream\n $ioe")
+                return
+            }
+
+            try {
+                val msgString = msg.toString(Charsets.UTF_8)
+                Log.i(TSERVER, "\nServer Received  $nBytes, Bytes:  [$msgString]\n")
+                runOnUiThread { echoMsg("\nReceived $nBytes:  [$msgString]\n") }
+            } catch (uee: UnsupportedEncodingException) {
+                Log.e(TSERVER,
+                        "UnsupportedEncodingException when converting bytes to String\n $uee")
+            } finally {
+                cancel()        //for this App - close() after 1 (or no) message received
+            }
+        }
+
+        /**
+         * Will cancel the listening socket, and cause the thread to finish
+         */
+        fun cancel() {
+            try {
+                mmServerSocket!!.close()
+            } catch (ioe: IOException) {
+                Log.e(TSERVER, "IOException when canceling serverSocket\n $ioe")
+            }
+        }
+    }
+
+    companion object {
+        private const val ACCESS_FINE_LOCATION = 1
+        private const val N_SECONDS = 255
+        private const val TCLIENT = "--Talker Client--"  //for Log.X
+        private const val TSERVER = "--Talker SERVER--"  //for Log.X
+        private const val REQUEST_ENABLE_BT = 3313  //our own code used with Intents
+        private const val MY_UUID_STRING = "AIzaSyA4Es5y5iYN0VbrkeD1yXGeaFTjAg6KWYo"
+        //from www.uuidgenerator.net
+        private const val SERVICE_NAME = "Talker"
+        private const val LOG_TAG = "--Talker----"
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        // Handle action bar item clicks here. The action bar will
+        // automatically handle clicks on the Home/Up button, so long
+        // as you specify a parent activity in AndroidManifest.xml.
+        return when (item.itemId) {
+            R.id.action_settings -> true
+            else -> super.onOptionsItemSelected(item)
+        }
+    }
+
+    /***********************************************************************************************/
+
+
+*/
+
+
+
 }
